@@ -40,6 +40,7 @@ import java.net.NetworkInterface;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.security.SecureRandom;
 import java.util.Collections;
 import java.io.FileWriter;
 import java.text.SimpleDateFormat;
@@ -73,6 +74,7 @@ public class ReceiverActivity extends Activity implements SurfaceHolder.Callback
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        serviceName = loadDeviceName();
         getWindow().getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
                 View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
@@ -97,7 +99,7 @@ public class ReceiverActivity extends Activity implements SurfaceHolder.Callback
         content.setPadding(dp(42), dp(24), dp(42), dp(22));
         idlePanel.addView(content, new FrameLayout.LayoutParams(-1, -1));
 
-        TextView deviceName = makeText("设备名称：LanCast", 18, 0xFF71E5FF, Typeface.BOLD);
+        TextView deviceName = makeText("设备名称：" + serviceName, 18, 0xFF71E5FF, Typeface.BOLD);
         content.addView(deviceName, new LinearLayout.LayoutParams(-1, -2));
 
         status = new TextView(this);
@@ -128,7 +130,7 @@ public class ReceiverActivity extends Activity implements SurfaceHolder.Callback
                 "实时屏幕投送",
                 "Android 手机 / 平板\n\n" +
                 "1  安装并打开 LanCast Sender\n" +
-                "2  在设备列表中选择“LanCast”\n" +
+                "2  在设备列表中选择“" + serviceName + "”\n" +
                 "3  授权屏幕与声音，点击开始投送\n\n" +
                 "适合：手机桌面、照片、演示和实时操作");
         LinearLayout.LayoutParams leftCard = new LinearLayout.LayoutParams(0, -1, 1f);
@@ -140,7 +142,7 @@ public class ReceiverActivity extends Activity implements SurfaceHolder.Callback
                 "优酷 / 腾讯视频 / 哔哩哔哩等\n\n" +
                 "1  打开视频 App 并播放视频\n" +
                 "2  点击播放器中的“TV”或“投屏”\n" +
-                "3  在设备列表中选择“LanCast”\n\n" +
+                "3  在设备列表中选择“" + serviceName + "”\n\n" +
                 "适合：支持 DLNA 投屏的在线视频 App");
         LinearLayout.LayoutParams rightCard = new LinearLayout.LayoutParams(0, -1, 1f);
         rightCard.leftMargin = dp(10);
@@ -404,7 +406,7 @@ public class ReceiverActivity extends Activity implements SurfaceHolder.Callback
 
     private void startDlna() {
         if (dlnaServer != null) return;
-        dlnaServer = new DlnaServer(this, surface, localIp(), "LanCast", new DlnaServer.Listener() {
+        dlnaServer = new DlnaServer(this, surface, localIp(), serviceName, new DlnaServer.Listener() {
             @Override public void onDlnaStatus(String message) {
                 log(message);
             }
@@ -458,7 +460,6 @@ public class ReceiverActivity extends Activity implements SurfaceHolder.Callback
         if (registrationListener != null) return;
         nsdManager = (NsdManager) getSystemService(NSD_SERVICE);
         NsdServiceInfo service = new NsdServiceInfo();
-        serviceName = "LanCast";
         service.setServiceName(serviceName);
         service.setServiceType("_lancast._tcp.");
         service.setPort(PORT);
@@ -485,6 +486,19 @@ public class ReceiverActivity extends Activity implements SurfaceHolder.Callback
         WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         int ip = wm.getConnectionInfo().getIpAddress();
         return (ip & 255) + "." + ((ip >> 8) & 255) + "." + ((ip >> 16) & 255) + "." + ((ip >> 24) & 255);
+    }
+
+    private String loadDeviceName() {
+        android.content.SharedPreferences preferences =
+                getSharedPreferences("lancast_device", MODE_PRIVATE);
+        String suffix = preferences.getString("name_suffix", "");
+        if (suffix == null || suffix.length() != 4) {
+            suffix = Integer.toString(new SecureRandom().nextInt(36 * 36 * 36 * 36), 36)
+                    .toUpperCase(Locale.US);
+            while (suffix.length() < 4) suffix = "0" + suffix;
+            preferences.edit().putString("name_suffix", suffix).apply();
+        }
+        return "LanCast-" + suffix;
     }
 
     private TextView makeText(String text, float size, int color, int style) {
