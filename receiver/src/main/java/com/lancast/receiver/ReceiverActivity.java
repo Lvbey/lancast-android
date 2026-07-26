@@ -17,6 +17,7 @@ import android.net.nsd.NsdServiceInfo;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Build;
+import android.os.Handler;
 import android.os.PowerManager;
 import android.view.Gravity;
 import android.view.Surface;
@@ -25,6 +26,8 @@ import android.view.SurfaceView;
 import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import java.io.BufferedInputStream;
@@ -49,6 +52,15 @@ public class ReceiverActivity extends Activity implements SurfaceHolder.Callback
     private SurfaceView videoView;
     private FrameLayout idlePanel;
     private TextView status;
+    private LinearLayout volumePanel;
+    private ProgressBar volumeBar;
+    private TextView volumeText;
+    private final Handler uiHandler = new Handler();
+    private final Runnable hideVolume = new Runnable() {
+        @Override public void run() {
+            if (volumePanel != null) volumePanel.setVisibility(View.GONE);
+        }
+    };
     private volatile boolean running;
     private ServerSocket server;
     private Socket client;
@@ -56,7 +68,7 @@ public class ReceiverActivity extends Activity implements SurfaceHolder.Callback
     private PowerManager.WakeLock wakeLock;
     private NsdManager nsdManager;
     private NsdManager.RegistrationListener registrationListener;
-    private String serviceName = "AOC A2 Pro";
+    private String serviceName = "LanCast";
     private DlnaServer dlnaServer;
 
     @Override public void onCreate(Bundle state) {
@@ -77,59 +89,100 @@ public class ReceiverActivity extends Activity implements SurfaceHolder.Callback
         ImageView quickStart = new ImageView(this);
         quickStart.setImageResource(R.drawable.receiver_quick_start);
         quickStart.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        quickStart.setAlpha(0.22f);
         idlePanel.addView(quickStart, new FrameLayout.LayoutParams(-1, -1));
 
-        TextView title = new TextView(this);
-        title.setText("LanCast 无线投屏");
-        title.setTextColor(Color.WHITE);
-        title.setTextSize(30);
-        title.setTypeface(Typeface.create("sans", Typeface.BOLD));
-        title.setGravity(Gravity.CENTER);
-        title.setShadowLayer(10, 0, 2, 0xCC000000);
-        FrameLayout.LayoutParams titleParams = new FrameLayout.LayoutParams(-1, -2);
-        titleParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-        titleParams.topMargin = dp(32);
-        idlePanel.addView(title, titleParams);
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(42), dp(24), dp(42), dp(22));
+        idlePanel.addView(content, new FrameLayout.LayoutParams(-1, -1));
 
-        TextView guide = new TextView(this);
-        guide.setText("手机与投影仪连接同一 Wi-Fi\n打开手机视频 App，点击“投屏”，选择 “AOC A2 Pro”");
-        guide.setTextColor(0xFFEAF8FF);
-        guide.setTextSize(18);
-        guide.setTypeface(Typeface.create("sans", Typeface.NORMAL));
-        guide.setGravity(Gravity.CENTER);
-        guide.setLineSpacing(dp(4), 1.06f);
-        guide.setPadding(dp(24), dp(10), dp(24), dp(10));
-        GradientDrawable guideBackground = new GradientDrawable();
-        guideBackground.setColor(0xB8122038);
-        guideBackground.setCornerRadius(dp(16));
-        guide.setBackgroundDrawable(guideBackground);
-        FrameLayout.LayoutParams guideParams = new FrameLayout.LayoutParams(-2, -2);
-        guideParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-        guideParams.topMargin = dp(82);
-        guideParams.leftMargin = dp(36);
-        guideParams.rightMargin = dp(36);
-        idlePanel.addView(guide, guideParams);
+        TextView deviceName = makeText("设备名称：LanCast", 18, 0xFF71E5FF, Typeface.BOLD);
+        content.addView(deviceName, new LinearLayout.LayoutParams(-1, -2));
 
         status = new TextView(this);
-        status.setTextColor(Color.WHITE);
-        status.setTextSize(17);
+        status.setTextColor(0xFFFFFFFF);
+        status.setTextSize(25);
         status.setTypeface(Typeface.create("sans", Typeface.BOLD));
         status.setGravity(Gravity.CENTER);
-        status.setPadding(dp(22), dp(9), dp(22), dp(9));
-        GradientDrawable statusBackground = new GradientDrawable();
-        statusBackground.setColor(0xD9142D4A);
-        statusBackground.setCornerRadius(dp(30));
-        statusBackground.setStroke(dp(1), 0x883EDBFF);
-        status.setBackgroundDrawable(statusBackground);
-        FrameLayout.LayoutParams statusParams = new FrameLayout.LayoutParams(-2, -2);
-        statusParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        statusParams.bottomMargin = dp(28);
-        statusParams.leftMargin = dp(28);
-        statusParams.rightMargin = dp(28);
-        idlePanel.addView(status, statusParams);
+        status.setSingleLine(false);
+        LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(-1, -2);
+        statusParams.topMargin = dp(2);
+        content.addView(status, statusParams);
+
+        TextView intro = makeText(
+                "请保持手机与投影设备连接同一 Wi-Fi，然后选择下方任一方式开始投屏",
+                16, 0xFFD9E8F7, Typeface.NORMAL);
+        intro.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams introParams = new LinearLayout.LayoutParams(-1, -2);
+        introParams.topMargin = dp(6);
+        introParams.bottomMargin = dp(14);
+        content.addView(intro, introParams);
+
+        LinearLayout cards = new LinearLayout(this);
+        cards.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams cardsParams = new LinearLayout.LayoutParams(-1, 0, 1f);
+        content.addView(cards, cardsParams);
+
+        LinearLayout mirrorCard = makeInstructionCard(
+                "实时屏幕投送",
+                "Android 手机 / 平板\n\n" +
+                "1  安装并打开 LanCast Sender\n" +
+                "2  在设备列表中选择“LanCast”\n" +
+                "3  授权屏幕与声音，点击开始投送\n\n" +
+                "适合：手机桌面、照片、演示和实时操作");
+        LinearLayout.LayoutParams leftCard = new LinearLayout.LayoutParams(0, -1, 1f);
+        leftCard.rightMargin = dp(10);
+        cards.addView(mirrorCard, leftCard);
+
+        LinearLayout dlnaCard = makeInstructionCard(
+                "在线视频投屏 · 手机免安装",
+                "优酷 / 腾讯视频 / 哔哩哔哩等\n\n" +
+                "1  打开视频 App 并播放视频\n" +
+                "2  点击播放器中的“TV”或“投屏”\n" +
+                "3  在设备列表中选择“LanCast”\n\n" +
+                "适合：支持 DLNA 投屏的在线视频 App");
+        LinearLayout.LayoutParams rightCard = new LinearLayout.LayoutParams(0, -1, 1f);
+        rightCard.leftMargin = dp(10);
+        cards.addView(dlnaCard, rightCard);
+
+        TextView footer = makeText(
+                "准备就绪后保持本页面打开；开始播放时说明页会自动隐藏",
+                14, 0xFF9DC8DA, Typeface.NORMAL);
+        footer.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams footerParams = new LinearLayout.LayoutParams(-1, -2);
+        footerParams.topMargin = dp(12);
+        content.addView(footer, footerParams);
+
         root.addView(idlePanel, new FrameLayout.LayoutParams(-1, -1));
+
+        volumePanel = new LinearLayout(this);
+        volumePanel.setOrientation(LinearLayout.VERTICAL);
+        volumePanel.setGravity(Gravity.CENTER);
+        volumePanel.setPadding(dp(24), dp(14), dp(24), dp(14));
+        GradientDrawable volumeBackground = new GradientDrawable();
+        volumeBackground.setColor(0xE61A2333);
+        volumeBackground.setCornerRadius(dp(14));
+        volumePanel.setBackgroundDrawable(volumeBackground);
+        volumeText = new TextView(this);
+        volumeText.setTextColor(Color.WHITE);
+        volumeText.setTextSize(16);
+        volumeText.setTypeface(Typeface.create("sans", Typeface.BOLD));
+        volumeText.setGravity(Gravity.CENTER);
+        volumeBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        volumeBar.setMax(100);
+        LinearLayout.LayoutParams barParams = new LinearLayout.LayoutParams(dp(260), dp(12));
+        barParams.topMargin = dp(8);
+        volumePanel.addView(volumeText, new LinearLayout.LayoutParams(-2, -2));
+        volumePanel.addView(volumeBar, barParams);
+        volumePanel.setVisibility(View.GONE);
+        FrameLayout.LayoutParams volumeParams = new FrameLayout.LayoutParams(-2, -2);
+        volumeParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        volumeParams.bottomMargin = dp(56);
+        root.addView(volumePanel, volumeParams);
+
         setContentView(root);
-        status.setText("正在启动投屏与 DLNA 服务…");
+        status.setText("正在连接网络并启动投屏服务…");
 
         PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "LanCast:Receiver");
@@ -151,8 +204,7 @@ public class ReceiverActivity extends Activity implements SurfaceHolder.Callback
         serverThread = new Thread(() -> {
             while (running) {
                 try {
-                    updateStatus("接收器已启动\nIP：" + localIp() + "\n端口：" + PORT +
-                            "\n投屏名称：" + serviceName + "\n可在手机发送端直接搜索");
+                    updateStatus("已连接网络：" + localIp() + "    投屏名称：" + serviceName);
                     server = new ServerSocket(PORT);
                     log("监听 TCP " + PORT + "，服务名 " + serviceName);
                     client = server.accept();
@@ -335,7 +387,7 @@ public class ReceiverActivity extends Activity implements SurfaceHolder.Callback
 
     private void startDlna() {
         if (dlnaServer != null) return;
-        dlnaServer = new DlnaServer(this, surface, localIp(), "AOC A2 Pro", new DlnaServer.Listener() {
+        dlnaServer = new DlnaServer(this, surface, localIp(), "LanCast", new DlnaServer.Listener() {
             @Override public void onDlnaStatus(String message) {
                 log(message);
             }
@@ -389,9 +441,7 @@ public class ReceiverActivity extends Activity implements SurfaceHolder.Callback
         if (registrationListener != null) return;
         nsdManager = (NsdManager) getSystemService(NSD_SERVICE);
         NsdServiceInfo service = new NsdServiceInfo();
-        String ip = localIp();
-        String suffix = ip.contains(".") ? ip.substring(ip.lastIndexOf('.') + 1) : "Receiver";
-        serviceName = "AOC A2 Pro-" + suffix;
+        serviceName = "LanCast";
         service.setServiceName(serviceName);
         service.setServiceType("_lancast._tcp.");
         service.setPort(PORT);
@@ -420,6 +470,39 @@ public class ReceiverActivity extends Activity implements SurfaceHolder.Callback
         return (ip & 255) + "." + ((ip >> 8) & 255) + "." + ((ip >> 16) & 255) + "." + ((ip >> 24) & 255);
     }
 
+    private TextView makeText(String text, float size, int color, int style) {
+        TextView view = new TextView(this);
+        view.setText(text);
+        view.setTextSize(size);
+        view.setTextColor(color);
+        view.setTypeface(Typeface.create("sans", style));
+        view.setLineSpacing(dp(3), 1.05f);
+        return view;
+    }
+
+    private LinearLayout makeInstructionCard(String heading, String instructions) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(26), dp(18), dp(26), dp(16));
+        GradientDrawable background = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR,
+                new int[]{0xE629355A, 0xE61A2948});
+        background.setCornerRadius(dp(22));
+        background.setStroke(dp(1), 0x663EDBFF);
+        card.setBackgroundDrawable(background);
+
+        TextView title = makeText(heading, 22, Color.WHITE, Typeface.BOLD);
+        title.setGravity(Gravity.CENTER);
+        card.addView(title, new LinearLayout.LayoutParams(-1, -2));
+
+        TextView body = makeText(instructions, 16, 0xFFE7F5FF, Typeface.NORMAL);
+        body.setGravity(Gravity.LEFT);
+        LinearLayout.LayoutParams bodyParams = new LinearLayout.LayoutParams(-1, -2);
+        bodyParams.topMargin = dp(14);
+        card.addView(body, bodyParams);
+        return card;
+    }
+
     private int dp(int value) {
         return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
@@ -428,8 +511,29 @@ public class ReceiverActivity extends Activity implements SurfaceHolder.Callback
     private void closeServer() { try { if (server != null) server.close(); } catch (Exception ignored) {} server = null; }
 
     @Override public boolean onKeyDown(int keyCode, android.view.KeyEvent event) {
-        if (dlnaServer != null && dlnaServer.handleRemoteKey(keyCode)) return true;
+        boolean volumeKey = keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP ||
+                keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN;
+        if (dlnaServer != null && dlnaServer.handleRemoteKey(keyCode)) {
+            if (volumeKey) showVolume(dlnaServer.getVolume());
+            return true;
+        }
+        if (volumeKey) {
+            AudioManager audio = (AudioManager) getSystemService(AUDIO_SERVICE);
+            int direction = keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP
+                    ? AudioManager.ADJUST_RAISE : AudioManager.ADJUST_LOWER;
+            audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, AudioManager.FLAG_SHOW_UI);
+            return true;
+        }
         return super.onKeyDown(keyCode, event);
+    }
+
+    private void showVolume(int percent) {
+        volumeBar.setProgress(percent);
+        volumeText.setText("音量  " + percent + "%");
+        volumePanel.setVisibility(View.VISIBLE);
+        volumePanel.bringToFront();
+        uiHandler.removeCallbacks(hideVolume);
+        uiHandler.postDelayed(hideVolume, 1800);
     }
 
     @Override protected void onDestroy() {
@@ -440,6 +544,7 @@ public class ReceiverActivity extends Activity implements SurfaceHolder.Callback
         if (dlnaServer != null) dlnaServer.stop();
         closeClient();
         closeServer();
+        uiHandler.removeCallbacks(hideVolume);
         if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
         super.onDestroy();
     }

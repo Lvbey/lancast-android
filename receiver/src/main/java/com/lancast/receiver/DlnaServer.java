@@ -595,6 +595,10 @@ final class DlnaServer {
         }
     }
 
+    int getVolume() {
+        return dlnaVolume;
+    }
+
     private void seekBy(int deltaMs) {
         if (!prepared || player == null) return;
         int duration = safeDuration();
