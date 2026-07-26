@@ -24,6 +24,7 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import java.io.BufferedInputStream;
@@ -46,6 +47,7 @@ public class ReceiverActivity extends Activity implements SurfaceHolder.Callback
     private static final int PORT = 53516;
     private Surface surface;
     private SurfaceView videoView;
+    private FrameLayout idlePanel;
     private TextView status;
     private volatile boolean running;
     private ServerSocket server;
@@ -71,23 +73,63 @@ public class ReceiverActivity extends Activity implements SurfaceHolder.Callback
         FrameLayout.LayoutParams videoParams = new FrameLayout.LayoutParams(-1, -1);
         videoParams.gravity = Gravity.CENTER;
         root.addView(videoView, videoParams);
+        idlePanel = new FrameLayout(this);
+        ImageView quickStart = new ImageView(this);
+        quickStart.setImageResource(R.drawable.receiver_quick_start);
+        quickStart.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        idlePanel.addView(quickStart, new FrameLayout.LayoutParams(-1, -1));
+
+        TextView title = new TextView(this);
+        title.setText("LanCast 无线投屏");
+        title.setTextColor(Color.WHITE);
+        title.setTextSize(30);
+        title.setTypeface(Typeface.create("sans", Typeface.BOLD));
+        title.setGravity(Gravity.CENTER);
+        title.setShadowLayer(10, 0, 2, 0xCC000000);
+        FrameLayout.LayoutParams titleParams = new FrameLayout.LayoutParams(-1, -2);
+        titleParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+        titleParams.topMargin = dp(32);
+        idlePanel.addView(title, titleParams);
+
+        TextView guide = new TextView(this);
+        guide.setText("手机与投影仪连接同一 Wi-Fi\n打开手机视频 App，点击“投屏”，选择 “AOC A2 Pro”");
+        guide.setTextColor(0xFFEAF8FF);
+        guide.setTextSize(18);
+        guide.setTypeface(Typeface.create("sans", Typeface.NORMAL));
+        guide.setGravity(Gravity.CENTER);
+        guide.setLineSpacing(dp(4), 1.06f);
+        guide.setPadding(dp(24), dp(10), dp(24), dp(10));
+        GradientDrawable guideBackground = new GradientDrawable();
+        guideBackground.setColor(0xB8122038);
+        guideBackground.setCornerRadius(dp(16));
+        guide.setBackgroundDrawable(guideBackground);
+        FrameLayout.LayoutParams guideParams = new FrameLayout.LayoutParams(-2, -2);
+        guideParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+        guideParams.topMargin = dp(82);
+        guideParams.leftMargin = dp(36);
+        guideParams.rightMargin = dp(36);
+        idlePanel.addView(guide, guideParams);
+
         status = new TextView(this);
         status.setTextColor(Color.WHITE);
-        status.setTextSize(22);
-        status.setTypeface(Typeface.create("sans", Typeface.NORMAL));
+        status.setTextSize(17);
+        status.setTypeface(Typeface.create("sans", Typeface.BOLD));
         status.setGravity(Gravity.CENTER);
-        status.setCompoundDrawablesWithIntrinsicBounds(0, R.mipmap.ic_launcher, 0, 0);
-        status.setCompoundDrawablePadding((int) (18 * getResources().getDisplayMetrics().density));
-        status.setLineSpacing(8, 1.08f);
-        int horizontalPadding = (int) (36 * getResources().getDisplayMetrics().density);
-        status.setPadding(horizontalPadding, 20, horizontalPadding, 20);
-        GradientDrawable idleBackground = new GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                new int[]{0xFF020817, 0xFF071A36, 0xFF071022});
-        status.setBackgroundDrawable(idleBackground);
-        root.addView(status, new FrameLayout.LayoutParams(-1, -1));
+        status.setPadding(dp(22), dp(9), dp(22), dp(9));
+        GradientDrawable statusBackground = new GradientDrawable();
+        statusBackground.setColor(0xD9142D4A);
+        statusBackground.setCornerRadius(dp(30));
+        statusBackground.setStroke(dp(1), 0x883EDBFF);
+        status.setBackgroundDrawable(statusBackground);
+        FrameLayout.LayoutParams statusParams = new FrameLayout.LayoutParams(-2, -2);
+        statusParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        statusParams.bottomMargin = dp(28);
+        statusParams.leftMargin = dp(28);
+        statusParams.rightMargin = dp(28);
+        idlePanel.addView(status, statusParams);
+        root.addView(idlePanel, new FrameLayout.LayoutParams(-1, -1));
         setContentView(root);
-        status.setText("LanCast 投屏接收器\n\n正在启动局域网投屏与 DLNA 服务…");
+        status.setText("正在启动投屏与 DLNA 服务…");
 
         PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "LanCast:Receiver");
@@ -179,7 +221,7 @@ public class ReceiverActivity extends Activity implements SurfaceHolder.Callback
             log("发送端未启用内部音频");
         }
         updateStatus("");
-        runOnUiThread(() -> status.setVisibility(View.GONE));
+        runOnUiThread(() -> idlePanel.setVisibility(View.GONE));
         try {
             boolean firstFrame = true;
             while (running && !socket.isClosed()) {
@@ -230,7 +272,7 @@ public class ReceiverActivity extends Activity implements SurfaceHolder.Callback
                 try { audioTrack.stop(); } catch (Exception ignored) {}
                 audioTrack.release();
             }
-            runOnUiThread(() -> status.setVisibility(View.VISIBLE));
+            runOnUiThread(() -> idlePanel.setVisibility(View.VISIBLE));
         }
     }
 
@@ -299,7 +341,7 @@ public class ReceiverActivity extends Activity implements SurfaceHolder.Callback
             }
             @Override public void onDlnaPlaybackStarting() {
                 closeClient();
-                runOnUiThread(() -> status.setVisibility(View.GONE));
+                runOnUiThread(() -> idlePanel.setVisibility(View.GONE));
             }
             @Override public void onDlnaVideoSize(int width, int height) {
                 log("DLNA 视频尺寸：" + width + "×" + height);
@@ -376,6 +418,10 @@ public class ReceiverActivity extends Activity implements SurfaceHolder.Callback
         WifiManager wm = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         int ip = wm.getConnectionInfo().getIpAddress();
         return (ip & 255) + "." + ((ip >> 8) & 255) + "." + ((ip >> 16) & 255) + "." + ((ip >> 24) & 255);
+    }
+
+    private int dp(int value) {
+        return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
 
     private void closeClient() { try { if (client != null) client.close(); } catch (Exception ignored) {} client = null; }
