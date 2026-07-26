@@ -1,0 +1,12 @@
+plugins {
+    id 'com.android.application' version '4.2.2' apply false
+}
+
+allprojects {
+    repositories {
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/central' }
+        google()
+        mavenCentral()
+    }
+}
