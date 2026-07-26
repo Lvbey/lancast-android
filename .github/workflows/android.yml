@@ -63,12 +63,13 @@ jobs:
       - name: Stage universal APK
         run: |
           mkdir -p staging
-          cp "${{ matrix.apk }}" "staging/${{ matrix.artifact }}.apk"
-          sha256sum "staging/${{ matrix.artifact }}.apk" > "staging/${{ matrix.artifact }}.apk.sha256"
+          PACKAGE_NAME="${{ matrix.artifact }}-${GITHUB_REF_NAME}"
+          cp "${{ matrix.apk }}" "staging/${PACKAGE_NAME}.apk"
+          sha256sum "staging/${PACKAGE_NAME}.apk" > "staging/${PACKAGE_NAME}.apk.sha256"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
+          name: ${{ matrix.artifact }}-${{ github.ref_name }}
           path: staging/*
           if-no-files-found: error
 
