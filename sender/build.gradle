@@ -2,15 +2,36 @@ plugins {
     id 'com.android.application'
 }
 
+def stableKeystorePath = System.getenv('LANCAST_KEYSTORE_PATH')
+
 android {
     compileSdk 33
     buildToolsVersion '33.0.2'
+
+    signingConfigs {
+        if (stableKeystorePath) {
+            stable {
+                storeFile file(stableKeystorePath)
+                storePassword System.getenv('LANCAST_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('LANCAST_KEY_ALIAS')
+                keyPassword System.getenv('LANCAST_KEY_PASSWORD')
+            }
+        }
+    }
 
     defaultConfig {
         applicationId 'com.lancast.sender'
         minSdk 21
         targetSdk 28
-        versionCode 6
-        versionName '3.0-audio'
+        versionCode 7
+        versionName '4.7.1'
+    }
+
+    buildTypes {
+        debug {
+            if (stableKeystorePath) {
+                signingConfig signingConfigs.stable
+            }
+        }
     }
 }
