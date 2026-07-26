@@ -146,13 +146,30 @@ public class ReceiverActivity extends Activity implements SurfaceHolder.Callback
         rightCard.leftMargin = dp(10);
         cards.addView(dlnaCard, rightCard);
 
-        TextView footer = makeText(
-                "准备就绪后保持本页面打开；开始播放时说明页会自动隐藏",
-                14, 0xFF9DC8DA, Typeface.NORMAL);
-        footer.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams footerParams = new LinearLayout.LayoutParams(-1, -2);
-        footerParams.topMargin = dp(12);
-        content.addView(footer, footerParams);
+        LinearLayout repositoryRow = new LinearLayout(this);
+        repositoryRow.setOrientation(LinearLayout.HORIZONTAL);
+        repositoryRow.setGravity(Gravity.CENTER);
+        repositoryRow.setPadding(dp(12), dp(8), dp(12), 0);
+
+        ImageView repositoryQr = new ImageView(this);
+        repositoryQr.setImageResource(R.drawable.github_repository_qr);
+        repositoryQr.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        repositoryRow.addView(repositoryQr, new LinearLayout.LayoutParams(dp(70), dp(70)));
+
+        TextView repositoryText = makeText(
+                "扫码查看项目源码、版本与下载\n" +
+                "github.com/Lvbey/lancast-android\n" +
+                "准备就绪后保持本页面打开，播放时说明页会自动隐藏",
+                13, 0xFFD5EDF7, Typeface.NORMAL);
+        repositoryText.setGravity(Gravity.LEFT | Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams repositoryTextParams =
+                new LinearLayout.LayoutParams(-2, -2);
+        repositoryTextParams.leftMargin = dp(14);
+        repositoryRow.addView(repositoryText, repositoryTextParams);
+
+        LinearLayout.LayoutParams repositoryParams = new LinearLayout.LayoutParams(-1, -2);
+        repositoryParams.topMargin = dp(4);
+        content.addView(repositoryRow, repositoryParams);
 
         root.addView(idlePanel, new FrameLayout.LayoutParams(-1, -1));
 
