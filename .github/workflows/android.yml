@@ -1,0 +1,82 @@
+name: Android compatibility build
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Receiver Android 4.2-16 Universal
+            module: receiver
+            tasks: ":receiver:lintDebug :receiver:assembleDebug"
+            apk: receiver/build/outputs/apk/debug/receiver-debug.apk
+            artifact: LanCast-Receiver-Android-4.2-16-universal
+          - name: Sender Android 5-16 Universal
+            module: sender
+            tasks: ":sender:lintDebug :sender:assembleDebug"
+            apk: sender/build/outputs/apk/debug/sender-debug.apk
+            artifact: LanCast-Sender-Android-5-16-universal
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "11"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-33" "build-tools;33.0.2"
+          cp "$ANDROID_HOME/build-tools/33.0.2/d8" "$ANDROID_HOME/build-tools/33.0.2/dx"
+          cp "$ANDROID_HOME/build-tools/33.0.2/lib/d8.jar" "$ANDROID_HOME/build-tools/33.0.2/lib/dx.jar"
+          echo "android.aapt2FromMavenOverride=$ANDROID_HOME/build-tools/33.0.2/aapt2" >> gradle.properties
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "6.7.1"
+
+      - name: Build and lint
+        run: gradle ${{ matrix.tasks }} --stacktrace
+
+      - name: Stage universal APK
+        run: |
+          mkdir -p staging
+          cp "${{ matrix.apk }}" "staging/${{ matrix.artifact }}.apk"
+          sha256sum "staging/${{ matrix.artifact }}.apk" > "staging/${{ matrix.artifact }}.apk.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: staging/*
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: release/*
