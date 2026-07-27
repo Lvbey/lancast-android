@@ -49,6 +49,7 @@ import java.util.Locale;
 
 public class ReceiverActivity extends Activity implements SurfaceHolder.Callback {
     private static final int PORT = 53516;
+    private static volatile boolean receiverVisible;
     private Surface surface;
     private SurfaceView videoView;
     private FrameLayout idlePanel;
@@ -74,6 +75,7 @@ public class ReceiverActivity extends Activity implements SurfaceHolder.Callback
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        ReceiverKeepAliveService.start(this);
         serviceName = loadDeviceName();
         getWindow().getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
@@ -206,6 +208,20 @@ public class ReceiverActivity extends Activity implements SurfaceHolder.Callback
         PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "LanCast:Receiver");
         wakeLock.acquire();
+    }
+
+    static boolean isReceiverVisible() {
+        return receiverVisible;
+    }
+
+    @Override protected void onStart() {
+        super.onStart();
+        receiverVisible = true;
+    }
+
+    @Override protected void onStop() {
+        receiverVisible = false;
+        super.onStop();
     }
 
     @Override public void surfaceCreated(SurfaceHolder holder) {
@@ -568,6 +584,7 @@ public class ReceiverActivity extends Activity implements SurfaceHolder.Callback
     }
 
     @Override protected void onDestroy() {
+        receiverVisible = false;
         running = false;
         if (nsdManager != null && registrationListener != null) {
             try { nsdManager.unregisterService(registrationListener); } catch (Exception ignored) {}
